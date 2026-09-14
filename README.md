@@ -89,6 +89,38 @@ padrao, entao a aplicacao sobe sem nenhuma configuracao.
 A configuracao e validada na inicializacao: um valor invalido derruba o processo
 no ato, em vez de deixar a aplicacao subir num estado inconsistente.
 
+## CI/CD
+
+Dois workflows no GitHub Actions:
+
+**`CI`** — roda em toda pull request e em todo push para `main`:
+
+1. Lint e testes com cobertura, em Node 22 e 24.
+2. Build da imagem Docker, subida do container e teste de fumaca: confere
+   `/health`, cria um link e valida que o redirect aponta para o destino certo.
+
+**`CD`** — constroi a imagem para `linux/amd64` e `linux/arm64`:
+
+- Em pull request, apenas constroi (validacao, sem publicar).
+- Em push para `main` ou em tag `v*`, publica no **GHCR** e, se o secret
+  `DOCKERHUB_USERNAME` estiver configurado, tambem no **Docker Hub**.
+
+Para publicar no Docker Hub, configure em *Settings > Secrets and variables >
+Actions*:
+
+| Secret               | Conteudo                            |
+| -------------------- | ----------------------------------- |
+| `DOCKERHUB_USERNAME` | Seu usuario do Docker Hub           |
+| `DOCKERHUB_TOKEN`    | Um access token gerado no Docker Hub |
+
+Sem esses secrets o workflow continua verde, publicando somente no GHCR.
+
+### Consumindo a imagem publicada
+
+```bash
+docker run -d -p 3000:3000 ghcr.io/<usuario>/<repositorio>:latest
+```
+
 ## Estrutura
 
 ```
