@@ -1,0 +1,55 @@
+name: CI
+
+# Roda em toda PR e em todo push para main: o objetivo e que nenhum merge
+# aconteca sem lint, testes e um container comprovadamente funcional.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qualidade:
+    name: Lint e testes (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22', '24']
+
+    steps:
+      - name: Obter o codigo
+        uses: actions/checkout@v4
+
+      - name: Preparar o Node ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Verificar o lint
+        run: npm run lint
+
+      - name: Executar os testes com cobertura
+        run: npm run test:coverage
+
+      - name: Publicar o relatorio de cobertura
+        # Guardamos o relatorio apenas de uma versao; as duas produzem o mesmo.
+        if: matrix.node == '24'
+        uses: actions/upload-artifact@v4
+        with:
+          name: cobertura
+          path: coverage/
+          retention-days: 7
