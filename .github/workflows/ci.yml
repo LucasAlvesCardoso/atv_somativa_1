@@ -53,3 +53,70 @@ jobs:
           name: cobertura
           path: coverage/
           retention-days: 7
+
+  container:
+    name: Build e teste de fumaca do container
+    runs-on: ubuntu-latest
+    needs: qualidade
+
+    steps:
+      - name: Obter o codigo
+        uses: actions/checkout@v4
+
+      - name: Construir a imagem
+        run: docker build -t encurtador-api:ci .
+
+      - name: Subir o container
+        run: docker run -d --name encurtador -p 3000:3000 encurtador-api:ci
+
+      - name: Aguardar a aplicacao responder
+        run: |
+          for tentativa in $(seq 1 30); do
+            if curl -fsS http://localhost:3000/health > /dev/null; then
+              echo "Aplicacao respondeu na tentativa $tentativa."
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "A aplicacao nao respondeu a tempo. Logs do container:"
+          docker logs encurtador
+          exit 1
+
+      - name: Exercitar o fluxo principal dentro do container
+        run: |
+          set -euo pipefail
+
+          echo "--- /health ---"
+          curl -fsS http://localhost:3000/health
+
+          DESTINO_ESPERADO='https://github.com/features/actions'
+
+          echo "--- criando um link curto ---"
+          CODIGO=$(curl -fsS -X POST http://localhost:3000/links \
+            -H 'Content-Type: application/json' \
+            -d "{\"url\":\"${DESTINO_ESPERADO}\",\"codigo\":\"ci-teste\"}" \
+            | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).dados.codigo")
+
+          test "$CODIGO" = "ci-teste"
+
+          echo "--- conferindo o redirect ---"
+          # Lemos o cabecalho Location em vez de %{redirect_url}: o curl normaliza
+          # essa variavel e acrescenta a barra final na raiz de um dominio, o que
+          # faria a comparacao falhar por um detalhe que a aplicacao nao produziu.
+          DESTINO=$(curl -sS -o /dev/null -D - "http://localhost:3000/$CODIGO" \
+            | awk 'tolower($1) == "location:" { print $2 }' | tr -d '\r')
+
+          test "$DESTINO" = "$DESTINO_ESPERADO"
+
+          echo "Fluxo completo validado no container."
+
+      - name: Mostrar os containers em execucao
+        run: docker ps
+
+      - name: Recolher os logs em caso de falha
+        if: failure()
+        run: docker logs encurtador
+
+      - name: Derrubar o container
+        if: always()
+        run: docker rm -f encurtador

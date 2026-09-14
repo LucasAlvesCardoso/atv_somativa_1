@@ -1,0 +1,18 @@
+# Dependencias sao reinstaladas dentro da imagem
+node_modules
+npm-debug.log*
+
+# Nao ha motivo para enviar isto ao contexto de build
+.git
+.github
+.gitignore
+.dockerignore
+Dockerfile
+README.md
+coverage
+tests
+.env
+.env.local
+.vscode
+.idea
+.DS_Store

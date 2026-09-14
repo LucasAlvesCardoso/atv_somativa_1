@@ -63,6 +63,37 @@ npm start            # execucao normal
 
 A API sobe em `http://localhost:3000`.
 
+## Executando com Docker
+
+```bash
+docker build -t encurtador-api .
+docker run -d --name encurtador -p 3000:3000 encurtador-api
+
+docker ps                                    # confere que o container esta de pe
+curl http://localhost:3000/health            # confere que a aplicacao responde
+```
+
+Para encerrar:
+
+```bash
+docker rm -f encurtador
+```
+
+### Como a imagem foi montada
+
+- **Build em dois estagios.** As dependencias sao instaladas em um estagio
+  separado, de modo que a imagem final nao carrega o cache do npm nem as
+  dependencias de desenvolvimento.
+- **Camadas em ordem de estabilidade.** Os manifestos sao copiados antes do
+  codigo: enquanto `package-lock.json` nao mudar, o Docker reaproveita a camada
+  de instalacao e o build seguinte nao reinstala nada.
+- **Usuario sem privilegios.** O processo roda como `node`, nao como root.
+- **Healthcheck proprio.** O container consulta a rota `/health` com o `fetch`
+  nativo do Node, sem precisar instalar `curl` ou `wget` na imagem.
+- **Encerramento limpo.** A aplicacao trata `SIGTERM`, entao `docker stop`
+  finaliza as conexoes em andamento em vez de esperar o timeout e receber um
+  `SIGKILL`.
+
 ## Testes
 
 ```bash
