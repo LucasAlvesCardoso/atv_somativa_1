@@ -1,0 +1,15 @@
+{
+  "name": "encurtador-api",
+  "version": "1.0.0",
+  "description": "API REST de encurtamento de URLs - projeto da disciplina de DevOps",
+  "private": true,
+  "type": "module",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "license": "MIT"
+}
