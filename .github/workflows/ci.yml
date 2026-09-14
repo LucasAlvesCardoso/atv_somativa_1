@@ -89,17 +89,24 @@ jobs:
           echo "--- /health ---"
           curl -fsS http://localhost:3000/health
 
+          DESTINO_ESPERADO='https://github.com/features/actions'
+
           echo "--- criando um link curto ---"
           CODIGO=$(curl -fsS -X POST http://localhost:3000/links \
             -H 'Content-Type: application/json' \
-            -d '{"url":"https://github.com","codigo":"ci-teste"}' \
+            -d "{\"url\":\"${DESTINO_ESPERADO}\",\"codigo\":\"ci-teste\"}" \
             | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).dados.codigo")
 
           test "$CODIGO" = "ci-teste"
 
           echo "--- conferindo o redirect ---"
-          DESTINO=$(curl -s -o /dev/null -w '%{redirect_url}' "http://localhost:3000/$CODIGO")
-          test "$DESTINO" = "https://github.com"
+          # Lemos o cabecalho Location em vez de %{redirect_url}: o curl normaliza
+          # essa variavel e acrescenta a barra final na raiz de um dominio, o que
+          # faria a comparacao falhar por um detalhe que a aplicacao nao produziu.
+          DESTINO=$(curl -sS -o /dev/null -D - "http://localhost:3000/$CODIGO" \
+            | awk 'tolower($1) == "location:" { print $2 }' | tr -d '\r')
+
+          test "$DESTINO" = "$DESTINO_ESPERADO"
 
           echo "Fluxo completo validado no container."
 
