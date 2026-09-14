@@ -1,0 +1,72 @@
+name: CD
+
+# Entrega continua: a cada mudanca aprovada, o pacote pronto para implantacao e
+# gerado e publicado como artefato, sem depender de ninguem rodar nada na mao.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cd-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  empacotar:
+    name: Empacotar a aplicacao
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Obter o codigo
+        uses: actions/checkout@v4
+
+      - name: Preparar o Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      # Somente as dependencias de producao: o pacote entregue nao leva vitest,
+      # oxlint nem supertest.
+      - name: Instalar as dependencias de producao
+        run: npm ci --omit=dev
+
+      - name: Montar o pacote de implantacao
+        run: |
+          set -euo pipefail
+
+          versao=$(node -p "require('./package.json').version")
+          nome="encurtador-api-${versao}-$(git rev-parse --short HEAD)"
+
+          mkdir -p entrega
+          tar -czf "entrega/${nome}.tar.gz" src node_modules package.json
+
+          echo "PACOTE=${nome}" >> "$GITHUB_ENV"
+          ls -lh entrega/
+
+      - name: Publicar o pacote como artefato
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PACOTE }}
+          path: entrega/
+          retention-days: 30
+
+      - name: Resumir a entrega
+        run: |
+          {
+            echo '### Pacote gerado'
+            echo
+            echo "\`${PACOTE}.tar.gz\`"
+            echo
+            if [ "${{ github.event_name }}" = 'pull_request' ]; then
+              echo 'Pull request: pacote gerado para validacao.'
+            else
+              echo 'Disponivel nos artefatos desta execucao.'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
