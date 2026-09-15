@@ -120,3 +120,16 @@ jobs:
       - name: Derrubar o container
         if: always()
         run: docker rm -f encurtador
+
+  alerta:
+    name: Alerta no Discord
+    needs: [qualidade, container]
+    # `always()` para que a falha tambem seja avisada: um alerta que so dispara
+    # quando tudo deu certo nao serve para nada.
+    if: always()
+    uses: ./.github/workflows/alerta-discord.yml
+    with:
+      fluxo: CI
+      resultado: ${{ (needs.qualidade.result == 'success' && needs.container.result == 'success') && 'success' || 'failure' }}
+    secrets:
+      webhook: ${{ secrets.DISCORD_WEBHOOK }}

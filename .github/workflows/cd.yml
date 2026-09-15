@@ -110,3 +110,14 @@ jobs:
               echo '```'
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+  alerta:
+    name: Alerta no Discord
+    needs: [publicar]
+    if: always()
+    uses: ./.github/workflows/alerta-discord.yml
+    with:
+      fluxo: CD
+      resultado: ${{ needs.publicar.result }}
+    secrets:
+      webhook: ${{ secrets.DISCORD_WEBHOOK }}
