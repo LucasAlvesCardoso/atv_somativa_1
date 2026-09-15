@@ -122,7 +122,7 @@ no ato, em vez de deixar a aplicacao subir num estado inconsistente.
 
 ## CI/CD
 
-Dois workflows no GitHub Actions:
+Tres workflows no GitHub Actions:
 
 **`CI`** — roda em toda pull request e em todo push para `main`:
 
@@ -145,6 +145,23 @@ Actions*:
 | `DOCKERHUB_TOKEN`    | Um access token gerado no Docker Hub |
 
 Sem esses secrets o workflow continua verde, publicando somente no GHCR.
+
+**`Alerta no Discord`** — workflow reutilizavel chamado pelo CI e pelo CD ao
+final de cada execucao. Envia ao Discord o resultado do fluxo, com o autor, o
+commit e o link para a execucao.
+
+O alerta dispara com `always()`, entao a falha tambem e avisada: um alerta que
+so notifica quando tudo deu certo nao serve para nada.
+
+Para receber os alertas, crie um webhook no Discord (*Configuracoes do canal >
+Integracoes > Webhooks*) e guarde a URL como secret:
+
+| Secret            | Conteudo                        |
+| ----------------- | ------------------------------- |
+| `DISCORD_WEBHOOK` | A URL do webhook do seu canal   |
+
+Sem esse secret os workflows continuam verdes: o passo registra que o webhook
+nao esta configurado e segue, porque um aviso nao pode derrubar o pipeline.
 
 ### Consumindo a imagem publicada
 

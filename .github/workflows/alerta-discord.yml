@@ -1,0 +1,93 @@
+name: Alerta no Discord
+
+# Workflow reutilizavel: o CI e o CD chamam este arquivo em vez de cada um
+# repetir a montagem da mensagem. Assim a configuracao do alerta vive em um
+# lugar so, e mudar o formato da notificacao nao exige tocar nos dois.
+on:
+  workflow_call:
+    inputs:
+      fluxo:
+        description: Nome do fluxo que originou o alerta (CI ou CD)
+        type: string
+        required: true
+      resultado:
+        description: Resultado consolidado do fluxo (success, failure ou cancelled)
+        type: string
+        required: true
+    secrets:
+      webhook:
+        description: URL do webhook do Discord
+        required: false
+
+jobs:
+  notificar:
+    name: Enviar alerta
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Enviar a mensagem para o Discord
+        env:
+          WEBHOOK: ${{ secrets.webhook }}
+          FLUXO: ${{ inputs.fluxo }}
+          RESULTADO: ${{ inputs.resultado }}
+          REPOSITORIO: ${{ github.repository }}
+          REFERENCIA: ${{ github.ref_name }}
+          AUTOR: ${{ github.actor }}
+          EVENTO: ${{ github.event_name }}
+          SHA: ${{ github.sha }}
+          URL_EXECUCAO: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          # Sem o secret configurado nao ha para onde enviar. Avisamos e seguimos
+          # em vez de falhar: o alerta e um aviso, nao pode derrubar o pipeline.
+          if [ -z "${WEBHOOK}" ]; then
+            echo "Secret DISCORD_WEBHOOK ausente: alerta nao enviado."
+            exit 0
+          fi
+
+          case "${RESULTADO}" in
+            success)   titulo="Tudo certo no ${FLUXO}"; cor=3066993  ;;  # verde
+            failure)   titulo="Falha no ${FLUXO}";      cor=15158332 ;;  # vermelho
+            cancelled) titulo="${FLUXO} cancelado";     cor=9807270  ;;  # cinza
+            *)         titulo="${FLUXO}: ${RESULTADO}"; cor=16776960 ;;  # amarelo
+          esac
+
+          # Montamos o JSON com jq para que qualquer aspa ou quebra de linha nos
+          # valores seja escapada, em vez de quebrar o corpo da requisicao.
+          payload=$(jq -n \
+            --arg titulo    "${titulo}" \
+            --arg descricao "Evento \`${EVENTO}\` em \`${REFERENCIA}\`" \
+            --arg repo      "${REPOSITORIO}" \
+            --arg autor     "${AUTOR}" \
+            --arg commit    "${SHA:0:7}" \
+            --arg url       "${URL_EXECUCAO}" \
+            --argjson cor   "${cor}" \
+            '{
+               username: "GitHub Actions",
+               embeds: [{
+                 title: $titulo,
+                 description: $descricao,
+                 url: $url,
+                 color: $cor,
+                 fields: [
+                   { name: "Repositorio", value: $repo,   inline: true },
+                   { name: "Autor",       value: $autor,  inline: true },
+                   { name: "Commit",      value: $commit, inline: true }
+                 ],
+                 footer: { text: "Clique no titulo para abrir a execucao" }
+               }]
+             }')
+
+          codigo=$(curl -sS -o /tmp/resposta-discord.txt -w '%{http_code}' \
+            -X POST "${WEBHOOK}" \
+            -H 'Content-Type: application/json' \
+            -d "${payload}")
+
+          if [ "${codigo}" -ge 200 ] && [ "${codigo}" -lt 300 ]; then
+            echo "Alerta enviado ao Discord (HTTP ${codigo})."
+          else
+            echo "O Discord recusou o alerta (HTTP ${codigo}):"
+            cat /tmp/resposta-discord.txt
+            exit 1
+          fi
